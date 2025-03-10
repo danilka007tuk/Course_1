@@ -1,69 +1,41 @@
-# import pandas as pd
-# import json
-# import re
-# from typing import Dict, List
-# import os
-# from src.my_logging import get_logger
-#
-# current_dir = os.path.dirname(os.path.abspath(__file__))
-# file_path_1 = os.path.join(current_dir, "../logs", "simple_search.log")
-# logger = get_logger("simple_search", file_path_1)
 import json
 import logging
 
-# Настройка логгера для записи в файл app.search.log
-logging.basicConfig(
-    filename="app.search.log",  # Логи будут записываться в файл app.search.log
-    level=logging.INFO,  # Уровень логирования
-    format="%(asctime)s - %(levelname)s - %(message)s",  # Формат лог-сообщений
-)
+from src.decorators import decorator_search
 
-def search_transactions(df, query):
-    """
-    Ищет транзакции, содержащие запрос в описании или категории.
-    Аргументы:
-    df (pandas._DataFrame): Данные о транзакциях.
-    _query (str): Поисковый запрос.
-    Возвращает:
-    str: JSON-ответ со списком найденных транзакций.
-    """
-    # Логгируем начало поиска
-    logging.info(f"Начинаем поиск транзакций по запросу: {query}")
+logger = logging.getLogger("services.log")
+file_handler = logging.FileHandler("services.log", "w")
+file_formatter = logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
+file_handler.setFormatter(file_formatter)
+logger.addHandler(file_handler)
+logger.setLevel(logging.INFO)
 
-    query = query.lower()  # Приводим запрос к нижнему регистру
 
-    # Приводим столбцы "Описание" и "Категория" к строковому типу и удаляем лишние пробелы
-    df["Описание"] = df["Описание"].astype(str).str.strip()
-    df["Категория"] = df["Категория"].astype(str).str.strip()
+@decorator_search
+def simple_search(my_list: list, string_search: str):
+    """Функция поиска по переданной строке"""
+    result = []
+    logger.info("Начало работы функции (simple_search)")
+    for i in my_list:
+        if string_search == '':
+            return result
+        elif (
+                i["Описание"] == "nan"
+                or type(i["Описание"]) is float
+                or i["Категория"] == "nan"
+                or type(i["Категория"]) is float
+        ):
+            continue
+        elif string_search in i["Описание"] or string_search in i["Категория"]:
+            result.append(i)
 
-    # Преобразуем все столбцы с типом Timestamp в строку
-    for column in df.select_dtypes(include=["datetime64"]).columns:
-        df[column] = df[column].dt.strftime("%Y-%m-%d %H:%M:%S")
+    logger.info("Конец работы функции (simple_search)")
+    data_json = json.dumps(result,
+                           indent=4,
+                           ensure_ascii=False,
+                           )
 
-    # Фильтруем транзакции с помощью filter и lambda
-    filtered_transactions = filter(
-        lambda row: query in str(row["Описание"]).lower() or query in str(row["Категория"]).lower(),
-        df.to_dict(orient="records"),
-    )
-
-    filtered_transactions_list = list(filtered_transactions)
-
-    # Логгируем количество найденных транзакций
-    logging.info(f"Найдено {len(filtered_transactions_list)} транзакций по запросу '{query}'.")
-
-    # Если транзакции не найдены, записываем предупреждение
-    if len(filtered_transactions_list) == 0:
-        logging.warning(f"По запросу '{query}' не найдено ни одной транзакции.")
-
-    # Преобразуем результат в JSON и возвращаем
-    result = (
-        json.dumps(filtered_transactions_list, ensure_ascii=False, indent=4) if filtered_transactions_list else "[]"
-    )
-
-    # Логгируем результат, который возвращается
-    logging.info(f"Результат поиска: {result}")
-
-    return result
+    return data_json
 
 
 #
